@@ -222,9 +222,19 @@ blur: blurred text can sometimes be recovered.
   `/readme/`). A new page that isn't added there silently goes unchecked,
   a11y floor included. That floor runs axe in jsdom, so contrast and overlap
   aren't checked.
-- `spec/guestbook.test.ts` tests the starter's plumbing and "goes when the
-  starter does"; `spec/readme.test.ts` requires `/readme/` to serve all of
-  `README.md`.
+- The starter's `spec/guestbook.test.ts` went with the guestbook; its two
+  platform claims (survives a reload, reaches other clients over SSE) are now
+  asserted of bookings in `spec/booking-flow.test.ts`. `spec/readme.test.ts`
+  requires `/readme/` to serve all of `README.md`.
+- **The spec server's clock is pinned** by `SPEC_NOW` in
+  `spec/global-setup.ts` (09:00, 30 September 2026, Canberra). Without it the
+  daylight-saving boundary (3–4 October) leaves the 14-day window within a
+  week and the flow tests could no longer book either side of it. Only the
+  booking page reads it; production never sets it. `booking-flow.test.ts`
+  also writes a played booking straight into the throwaway database, because
+  the page rightly can't book the past.
+- en-AU writes September as "Sept", not "Sep". A flow test assumed the
+  latter and went red against a page that was right.
 - `pnpm check:evidence` requires `CLAUDE.md`, `reflections/crit-7.md`,
   `PROCESS.md` without its template comment, and that every cited SHA exists.
 - CI runs only once the repo is public: check, evidence, two secret scans,
