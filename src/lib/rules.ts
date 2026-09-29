@@ -1,3 +1,4 @@
+import { day } from "./format";
 import type { Booking, Member } from "./schema";
 
 // Every number the booking rules use, in one place. The page, the rejection
@@ -132,7 +133,7 @@ export function freeBlockNote(
 ): string | null {
   if (!hasPackageOn(member, date)) {
     return member.packageExpiresOn
-      ? `Your Booking Package expired on ${member.packageExpiresOn}.`
+      ? `Your Booking Package expired on ${day(member.packageExpiresOn)}.`
       : "You don't have a Booking Package.";
   }
   if (memberBookings.some((booking) => booking.freeMinutes > 0)) {

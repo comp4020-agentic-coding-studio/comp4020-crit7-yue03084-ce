@@ -63,26 +63,72 @@ button {
   min-width: 0;
 }
 
+/* member names are long; court, date and the button share the next row */
+.choose label:first-of-type {
+  flex-basis: 100%;
+}
+
 /* a long member name would otherwise set the select's width, and the page's */
 .choose select {
   width: 100%;
 }
 
-.package {
-  color: #444;
+.choose .field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+.datepicker {
+  position: relative;
+}
+
+.datepicker summary {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #767676;
+  border-radius: 0.2rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.datepicker summary::-webkit-details-marker {
+  display: none;
+}
+
+.datepicker summary::after {
+  float: inline-end;
+  content: "▾";
+}
+
+.datepicker[open] summary {
+  border-color: #0b5fff;
 }
 
 .calendar {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0.25rem;
-  table-layout: fixed;
+  position: absolute;
+  z-index: 1;
+  inset-inline-start: 0;
+  width: 17rem;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  font-size: 0.9rem;
   text-align: center;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0.15rem;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 0.4rem;
+  box-shadow: 0 0.3rem 1rem rgb(0 0 0 / 15%);
 }
 
 .calendar caption {
-  font-weight: 600;
-  text-align: start;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 .calendar th {
@@ -100,7 +146,7 @@ button {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 2.75rem;
+  min-height: 2.25rem;
   border-radius: 0.3rem;
 }
 
@@ -130,9 +176,40 @@ button {
 }
 
 .calendar .month {
-  font-size: 0.7em;
+  font-size: 0.65em;
   line-height: 1;
   text-transform: uppercase;
+}
+
+.member-card {
+  padding: 0.5rem 1rem;
+  background: #f5f7fa;
+  border-radius: 0.4rem;
+}
+
+.member-card h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.1rem;
+}
+
+.member-card dl {
+  margin: 0;
+}
+
+.member-card dl div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+}
+
+.member-card dt {
+  flex: 0 0 9rem;
+  color: #595959;
+}
+
+.member-card dd {
+  flex: 1 1 12rem;
+  margin: 0;
 }
 
 .timetable fieldset {

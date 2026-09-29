@@ -86,7 +86,7 @@ describe("booking rules: without a current package", () => {
   it("says when the package expired", () => {
     const decision = ask({ member: expired });
     expect(decision).toMatchObject(priced(0, 3000));
-    if (decision.ok) expect(decision.note).toContain("2026-03-01");
+    if (decision.ok) expect(decision.note).toContain("1 Mar 2026");
   });
 });
 

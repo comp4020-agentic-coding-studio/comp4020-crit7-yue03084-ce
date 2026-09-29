@@ -10,7 +10,13 @@ import {
 } from "../lib/db";
 import { bus } from "../lib/events";
 import { clock, day, dollars, hours, month } from "../lib/format";
-import { addDays, canberraNow, daysBetween, freeBlockNote, isCompleted, RULES, slotsFor, spanOf } from "../lib/rules";
+import {
+  addDays,
+  canberraNow,
+  daylightEnd,
+  daysBetween,
+  freeBlockNote,
+  hasPackageOn, isCompleted, RULES, slotsFor, spanOf } from "../lib/rules";
 import "../styles.css";
 
 // One page does the whole job: pick who and where, see that court's day, tick
@@ -86,6 +92,11 @@ const dayLink = (d: string) => `/book/?${new URLSearchParams({ member: String(me
 
 const slots = slotsFor(date, bookingsOnCourt(court.id, date), now);
 const freeNote = freeBlockNote(member, date, memberBookingsOn(member.id, date));
+const packageStatus = !member.packageExpiresOn
+  ? "None"
+  : hasPackageOn(member, now.date)
+    ? `Current; expires ${day(member.packageExpiresOn)}`
+    : `Expired ${day(member.packageExpiresOn)}`;
 const history = memberHistory(member.id);
 const locations = [...new Set(courts.map((c) => c.location))];
 ---
@@ -159,11 +170,12 @@ const locations = [...new Set(courts.map((c) => c.location))];
           </select>
         </label>
         <input type="hidden" name="date" value={date} />
-        <button>Show times</button>
-      </form>
-
-      <table class="calendar">
-        <caption>Pick a day</caption>
+        <div class="field">
+          <span class="field-label" id="date-label">Date</span>
+          <details class="datepicker">
+            <summary aria-labelledby="date-label date-value"><span id="date-value">{day(date)}</span></summary>
+            <table class="calendar">
+              <caption>Pick a day</caption>
         <thead>
           <tr>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <th scope="col">{d}</th>)}</tr>
         </thead>
@@ -195,16 +207,42 @@ const locations = [...new Set(courts.map((c) => c.location))];
             ))
           }
         </tbody>
-      </table>
+            </table>
+          </details>
+        </div>
+        <button>Show times</button>
+      </form>
 
-      <p class="package">
-        {
-          freeNote
-            ? `${freeNote} Hire on ${day(date)} is ${dollars(RULES.hireCentsPerHour[member.rate])} an hour.`
-            : `The first ${hours(RULES.freeBlockMinutes)} you book on ${day(date)} are free; after that, hire is ${dollars(RULES.hireCentsPerHour[member.rate])} an hour.`
-        }
-        {" "}Lights are {dollars(RULES.lightsCentsPerHour)} an hour after dark.
-      </p>
+      <section class="member-card" aria-labelledby="member-heading">
+        <h2 id="member-heading">{member.name}</h2>
+        <dl>
+          <div>
+            <dt>Price list</dt>
+            <dd>
+              {member.rate === "student" ? "Student" : "General public"}: hire{" "}
+              {dollars(RULES.hireCentsPerHour[member.rate])} an hour
+            </dd>
+          </div>
+          <div>
+            <dt>Booking Package</dt>
+            <dd>{packageStatus}</dd>
+          </div>
+          <div>
+            <dt>{day(date)}</dt>
+            <dd>
+              {
+                !hasPackageOn(member, date)
+                  ? "No free hours without a current Booking Package."
+                  : (freeNote ?? `The first ${hours(RULES.freeBlockMinutes)} you book are free.`)
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Lights</dt>
+            <dd>{dollars(RULES.lightsCentsPerHour)} an hour from {clock(daylightEnd(date))}</dd>
+          </div>
+        </dl>
+      </section>
 
       <form method="post" action="/book/" class="timetable" data-court={court.id} data-date={date}>
         <input type="hidden" name="member" value={member.id} />
@@ -264,6 +302,19 @@ const locations = [...new Set(courts.map((c) => c.location))];
       for (const select of document.querySelectorAll<HTMLSelectElement>(".choose select")) {
         select.addEventListener("change", () => select.form?.submit());
       }
+
+      // The calendar pops up from the date and closes like any popup: on a
+      // click elsewhere, or Escape.
+      const picker = document.querySelector<HTMLDetailsElement>(".datepicker");
+      document.addEventListener("click", (event) => {
+        if (picker?.open && !picker.contains(event.target as Node)) picker.open = false;
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && picker?.open) {
+          picker.open = false;
+          picker.querySelector("summary")?.focus();
+        }
+      });
 
       // Live: when anyone books this court on this day, grey those hours out
       // here too, so a member doesn't tick a slot that's already gone. The
