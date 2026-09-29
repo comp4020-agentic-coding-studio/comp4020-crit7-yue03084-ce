@@ -92,6 +92,11 @@ the after-dark condition from the $8 rule.)*
   courts.
 - `portal.anu-sport.com.au/Booking/Book`, read in a rendered browser: "Minimum
   notice: 30 minutes", "Maximum notice: 14 days".
+- `anu-sport.com.au/facilities/facility-pricing-guide`: the price table is an
+  **image**, so text reads miss it; read from a screenshot on 2026-09-29.
+  "PRICE EFFECTIVE JANUARY 2024", with the row "TENNIS | 15 | 20" under
+  "STUDENT | GENERAL". The table gives no unit and lists no lights fee.
+  Celeste confirms it is per hour.
 
 ### Known unknowns: don't state these as fact
 
@@ -118,23 +123,26 @@ number lives in one constant (see "One fact, one piece of code").
 - **Daylight ends at 19:00 during daylight saving and 17:00 outside it**, in
   Canberra time. *(Celeste's own knowledge. The club's "5:00pm" notice is
   dated 28 April 2026, which is outside daylight saving, so the two agree.)*
-- **A package gives one free block a day**: one consecutive run of at most two
-  hours, on one court, in daylight. Everything else that day, including a
-  second booking, is $8.00 an hour. This is the literal reading of "two
-  consecutive hours ... per day, on the same court", not a total that can be
-  split across bookings.
-- **Pending: the price for a member with no current package.** Celeste knows
-  an official rate and will supply it. Until then, don't invent a number and
-  don't reuse $8. $8 is the package's overage rate, not published as the
-  general hire price.
+- **A package gives one free block a day**: the first two hours of one
+  booking, on one court, whether in daylight or not. A second booking that day
+  gets no free time. This is the literal reading of "two consecutive hours ...
+  per day, on the same court", not a total that can be split across bookings.
+- **Hire and lights are charged separately.** Hire beyond the free block, or
+  any hire without a current package, is charged at the price list's rate:
+  $15 an hour for students, $20 for the general public. Every hour after dark
+  adds an $8 lights fee, whether that hour's hire is free or paid. *(Celeste
+  has paid it this way. This **departs from the club's own sentence**, which
+  charges both overage and after-dark use at a flat $8.00. The app follows
+  what members are actually billed and says so; the README must name the
+  discrepancy rather than hide it.)*
 - **Courts open 06:00–22:00** *(Celeste; the club doesn't publish hours)*. The
   day is cut into one-hour slots. A booking is one or more consecutive slots
   on one court, and a slot someone holds is shown as unavailable before
   anyone picks it. The server checks again on submit, because two people can
   be looking at the same free slot.
 - **No login.** A few invented demo members, picked on the page, show having a
-  package, having none, and having one that has expired. None of them is
-  Celeste or carries her details.
+  package, having none, having one that has expired, and paying student or
+  general rates. None of them is Celeste or carries her details.
 
 **Rule: any claim about ANU's systems has to come from the list above, a page
 quoted verbatim, or Celeste. The agent doesn't infer how they work inside.**

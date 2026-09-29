@@ -6,16 +6,15 @@ import type { Booking, Member } from "./schema";
 // CLAUDE.md ("Published rules" and "Decided").
 export const RULES = {
   // anutennis.org/courtbookings/: "up to two consecutive hours of
-  // complimentary ANU Tennis Court hire per day, on the same court, during
-  // daylight hours"
+  // complimentary ANU Tennis Court hire per day, on the same court"
   freeBlockMinutes: 120,
-  // same sentence: usage beyond that "will be charged at the applicable rate
-  // of $8.00 per hour"
-  overageCentsPerHour: 800,
-  // The rate for a member without a current package. The club says only
-  // "Standard booking fees apply"; Celeste will supply the figure. Until
-  // then such bookings are refused rather than priced with a guess.
-  standardCentsPerHour: null as number | null,
+  // ANU Sport's facility price list, TENNIS row, per hour (Celeste confirms
+  // the unit): hire beyond the free block, or without a package
+  hireCentsPerHour: { student: 1500, general: 2000 },
+  // Celeste, as billed: $8 an hour for lights after dark, on top of hire.
+  // The club's page reads this $8 as a flat rate instead; CLAUDE.md records
+  // the discrepancy.
+  lightsCentsPerHour: 800,
   // the portal: "Minimum notice: 30 minutes"
   minNoticeMinutes: 30,
   // the portal: "Maximum notice: 14 days"; the club: "up to two weeks"
@@ -108,7 +107,15 @@ export interface BookingRequest {
 }
 
 export type Decision =
-  | { ok: true; freeMinutes: number; chargeCents: number }
+  | {
+      ok: true;
+      freeMinutes: number;
+      // the total, lights included
+      chargeCents: number;
+      lightsCents: number;
+      // why no hire is free, when none is
+      note: string | null;
+    }
   | { ok: false; reason: string };
 
 // The whole rulebook: given what a member asked for and what's already booked,
@@ -142,26 +149,22 @@ export function decide(request: BookingRequest): Decision {
 
   const minutes = endMinute - startMinute;
 
+  // One free block a day: the first up-to-two hours of the booking, dark or
+  // not, and only if no earlier booking that day already had free time.
+  let note: string | null = null;
   if (!hasPackageOn(member, date)) {
-    if (RULES.standardCentsPerHour === null) {
-      return {
-        ok: false,
-        reason: member.packageExpiresOn
-          ? `Your Booking Package expired on ${member.packageExpiresOn}, and standard court fees aren't set up here yet.`
-          : "You don't have a Booking Package, and standard court fees aren't set up here yet.",
-      };
-    }
-    return { ok: true, freeMinutes: 0, chargeCents: (minutes * RULES.standardCentsPerHour) / 60 };
+    note = member.packageExpiresOn
+      ? `Your Booking Package expired on ${member.packageExpiresOn}.`
+      : "You don't have a Booking Package.";
+  } else if (request.memberBookings.some((booking) => booking.freeMinutes > 0)) {
+    note = "You've already used today's two free hours.";
   }
+  const freeMinutes = note ? 0 : Math.min(RULES.freeBlockMinutes, minutes);
 
-  // One free block a day: the first up-to-two hours from the start, in
-  // daylight, and only if no earlier booking that day already had free time.
-  const freeUsed = request.memberBookings.some((booking) => booking.freeMinutes > 0);
-  const freeMinutes = freeUsed
-    ? 0
-    : Math.max(0, Math.min(RULES.freeBlockMinutes, daylightEnd(date) - startMinute, minutes));
-  const chargeCents = ((minutes - freeMinutes) * RULES.overageCentsPerHour) / 60;
-  return { ok: true, freeMinutes, chargeCents };
+  const hireCents = ((minutes - freeMinutes) * RULES.hireCentsPerHour[member.rate]) / 60;
+  const darkMinutes = Math.max(0, endMinute - Math.max(startMinute, daylightEnd(date)));
+  const lightsCents = (darkMinutes * RULES.lightsCentsPerHour) / 60;
+  return { ok: true, freeMinutes, chargeCents: hireCents + lightsCents, lightsCents, note };
 }
 
 export interface Slot {

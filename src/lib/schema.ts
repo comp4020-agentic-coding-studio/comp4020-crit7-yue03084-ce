@@ -26,6 +26,10 @@ export const members = sqliteTable("members", {
   id: int().primaryKey({ autoIncrement: true }),
   name: text().notNull(),
   packageExpiresOn: text("package_expires_on"),
+  // which row of ANU Sport's price list the member pays hire at
+  rate: text({ enum: ["student", "general"] })
+    .notNull()
+    .default("student"),
 });
 
 // The six courts the club lists for hire, seeded by a migration.
@@ -38,9 +42,10 @@ export const courts = sqliteTable("courts", {
 // One booking, kept after it's played: nothing ever deletes a row, and
 // "completed" is worked out from the date and time, not stored. Times are
 // minutes after midnight on `date`, Canberra time, which keeps the daylight
-// rule a comparison rather than timezone arithmetic. freeMinutes and
-// chargeCents are what the rules decided at booking time, stored so a later
-// rule change can't rewrite what a member was told.
+// rule a comparison rather than timezone arithmetic. freeMinutes, chargeCents
+// (the total) and lightsCents (the part of it that is the lights fee) are what
+// the rules decided at booking time, stored so a later rule change can't
+// rewrite what a member was told.
 export const bookings = sqliteTable("bookings", {
   id: int().primaryKey({ autoIncrement: true }),
   memberId: int("member_id")
@@ -54,6 +59,7 @@ export const bookings = sqliteTable("bookings", {
   endMinute: int("end_minute").notNull(),
   freeMinutes: int("free_minutes").notNull(),
   chargeCents: int("charge_cents").notNull(),
+  lightsCents: int("lights_cents").notNull().default(0),
   createdAt: text("created_at")
     .notNull()
     .default(sql`(datetime('now'))`),

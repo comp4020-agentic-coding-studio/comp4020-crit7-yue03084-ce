@@ -4,7 +4,6 @@ import {
   canberraNow,
   decide,
   isCompleted,
-  RULES,
   slotsFor,
 } from "../src/lib/rules";
 import type { Member } from "../src/lib/schema";
@@ -12,9 +11,9 @@ import type { Member } from "../src/lib/schema";
 // The rules the club and the portal publish, and the ones Celeste settled
 // (CLAUDE.md), held as a contract on the one function the server runs. Each
 // case is a promise the app makes to a member before they turn up to play.
-const withPackage: Member = { id: 1, name: "package", packageExpiresOn: "2027-03-01" };
-const noPackage: Member = { id: 2, name: "none", packageExpiresOn: null };
-const expired: Member = { id: 3, name: "expired", packageExpiresOn: "2026-03-01" };
+const withPackage: Member = { id: 1, name: "package", packageExpiresOn: "2027-03-01", rate: "student" };
+const noPackage: Member = { id: 2, name: "none", packageExpiresOn: null, rate: "general" };
+const expired: Member = { id: 3, name: "expired", packageExpiresOn: "2026-03-01", rate: "student" };
 
 const h = (hour: number) => hour * 60;
 const now = { date: "2026-09-29", minute: h(9) };
@@ -31,46 +30,62 @@ const ask = (overrides: Partial<BookingRequest>): ReturnType<typeof decide> =>
     ...overrides,
   });
 
+const priced = (freeMinutes: number, chargeCents: number, lightsCents = 0) => ({
+  ok: true,
+  freeMinutes,
+  chargeCents,
+  lightsCents,
+});
+
 describe("booking rules: what a package makes free", () => {
-  it("gives two daylight hours free", () => {
-    expect(ask({})).toEqual({ ok: true, freeMinutes: 120, chargeCents: 0 });
+  it("gives the first two hours of hire free", () => {
+    expect(ask({})).toMatchObject(priced(120, 0));
   });
 
-  it("charges $8 an hour beyond the two free hours", () => {
-    expect(ask({ endMinute: h(13) })).toEqual({ ok: true, freeMinutes: 120, chargeCents: 800 });
+  it("charges hire beyond two hours at the member's price-list rate", () => {
+    expect(ask({ endMinute: h(13) })).toMatchObject(priced(120, 1500));
+    expect(ask({ endMinute: h(13), member: { ...withPackage, rate: "general" } })).toMatchObject(priced(120, 2000));
   });
 
-  it("charges after dark: 17:00 outside daylight saving (3 October)", () => {
-    expect(ask({ date: "2026-10-03", startMinute: h(16), endMinute: h(18) })).toEqual({
-      ok: true,
-      freeMinutes: 60,
-      chargeCents: 800,
-    });
+  it("adds $8 lights after 17:00 outside daylight saving (3 October)", () => {
+    expect(ask({ date: "2026-10-03", startMinute: h(16), endMinute: h(18) })).toMatchObject(priced(120, 800, 800));
   });
 
-  it("charges after dark: 19:00 once daylight saving starts (4 October)", () => {
-    expect(ask({ date: "2026-10-04", startMinute: h(16), endMinute: h(18) })).toEqual({
-      ok: true,
-      freeMinutes: 120,
-      chargeCents: 0,
-    });
+  it("adds no lights before 19:00 once daylight saving starts (4 October)", () => {
+    expect(ask({ date: "2026-10-04", startMinute: h(16), endMinute: h(18) })).toMatchObject(priced(120, 0, 0));
   });
 
-  it("gives nothing free for a booking wholly after dark", () => {
-    expect(ask({ startMinute: h(20), endMinute: h(21) })).toEqual({ ok: true, freeMinutes: 0, chargeCents: 800 });
+  it("keeps hire free after dark and charges only the lights", () => {
+    expect(ask({ startMinute: h(20), endMinute: h(21) })).toMatchObject(priced(60, 800, 800));
   });
 
-  it("gives one free block a day: a second booking pays in full", () => {
-    expect(ask({ startMinute: h(14), endMinute: h(15), memberBookings: [{ freeMinutes: 60 }] })).toEqual({
-      ok: true,
-      freeMinutes: 0,
-      chargeCents: 800,
-    });
+  it("charges hire and lights together past two hours after dark", () => {
+    // 3 hours after 17:00: two free, one at $15, and $8 lights on all three
+    expect(ask({ date: "2026-10-03", startMinute: h(18), endMinute: h(21) })).toMatchObject(priced(120, 3900, 2400));
+  });
+
+  it("gives one free block a day: a second booking pays hire in full", () => {
+    const decision = ask({ startMinute: h(14), endMinute: h(15), memberBookings: [{ freeMinutes: 60 }] });
+    expect(decision).toMatchObject(priced(0, 1500));
+    if (decision.ok) expect(decision.note).toContain("already used");
   });
 
   it("counts the package valid until the day before 1 March", () => {
-    expect(ask({ date: "2027-02-28", now: { date: "2027-02-20", minute: h(9) } })).toMatchObject({ freeMinutes: 120 });
-    expect(ask({ date: "2027-03-01", now: { date: "2027-02-20", minute: h(9) } })).toMatchObject({ ok: false });
+    const later = { date: "2027-02-20", minute: h(9) };
+    expect(ask({ date: "2027-02-28", now: later })).toMatchObject(priced(120, 0));
+    expect(ask({ date: "2027-03-01", now: later })).toMatchObject(priced(0, 3000));
+  });
+});
+
+describe("booking rules: without a current package", () => {
+  it("charges all hire at the price-list rate", () => {
+    expect(ask({ member: noPackage, endMinute: h(11) })).toMatchObject(priced(0, 2000));
+  });
+
+  it("says when the package expired", () => {
+    const decision = ask({ member: expired });
+    expect(decision).toMatchObject(priced(0, 3000));
+    if (decision.ok) expect(decision.note).toContain("2026-03-01");
   });
 });
 
@@ -101,14 +116,6 @@ describe("booking rules: what gets refused", () => {
     expect(ask({ startMinute: h(5), endMinute: h(7) })).toMatchObject({ ok: false });
     expect(ask({ startMinute: h(21), endMinute: h(23) })).toMatchObject({ ok: false });
     expect(ask({ startMinute: h(10) + 30, endMinute: h(12) })).toMatchObject({ ok: false });
-  });
-
-  it("refuses a member without a current package while the standard fee is pending", () => {
-    expect(RULES.standardCentsPerHour).toBeNull();
-    expect(ask({ member: noPackage })).toMatchObject({ ok: false });
-    const decision = ask({ member: expired });
-    expect(decision.ok).toBe(false);
-    if (!decision.ok) expect(decision.reason).toContain("2026-03-01");
   });
 });
 

@@ -22,6 +22,20 @@
       "when": 1790650139301,
       "tag": "0002_seed_courts_and_demo_members",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790666829764,
+      "tag": "0003_woozy_mathemanic",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790666830233,
+      "tag": "0004_seed_general_public_members",
+      "breakpoints": true
     }
   ]
 }
