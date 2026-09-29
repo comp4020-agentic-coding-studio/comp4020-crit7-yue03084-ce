@@ -11,9 +11,7 @@ import {
   type Court,
   courts,
   type Member,
-  type Message,
   members,
-  messages,
 } from "./schema";
 
 // One SQLite file is the app's whole persistent state. In production
@@ -34,15 +32,7 @@ export const db = drizzle(client);
 // commit the migration it writes to drizzle/.
 migrate(db, { migrationsFolder: "./drizzle" });
 
-export type { Booking, Court, Member, Message };
-
-export function listMessages(): Message[] {
-  return db.select().from(messages).orderBy(desc(messages.id)).limit(50).all();
-}
-
-export function addMessage(body: string): Message {
-  return db.insert(messages).values({ body }).returning().get();
-}
+export type { Booking, Court, Member };
 
 export function listMembers(): Member[] {
   return db.select().from(members).orderBy(asc(members.id)).all();

@@ -1,8 +1,118 @@
 ---
-import { listMessages } from "../lib/db";
+import {
+  bookingsOnCourt,
+  getBooking,
+  listCourts,
+  listMembers,
+  memberBookingsOn,
+  memberHistory,
+  placeBooking,
+} from "../lib/db";
+import { bus } from "../lib/events";
+import { clock, day, dollars, hours, month } from "../lib/format";
+import {
+  addDays,
+  canberraNow,
+  daylightEnd,
+  daysBetween,
+  freeBlockNote,
+  hasMembershipOn,
+  isCompleted,
+  packageCurrentOn,
+  RULES,
+  slotsFor,
+  spanOf,
+} from "../lib/rules";
 import "../styles.css";
 
-const messages = listMessages();
+// One page does the whole job: pick who and where, see that court's day, tick
+// the hours, book. Reading it changes nothing; the only write is the POST
+// from the timetable, which the server re-checks against the database.
+// SPEC_NOW pins the clock for the end-to-end spec only (spec/global-setup.ts),
+// so its bookings either side of daylight saving stay bookable; it is never set
+// in production, where this is the real time.
+const now = canberraNow(process.env.SPEC_NOW ? new Date(process.env.SPEC_NOW) : undefined);
+const members = listMembers();
+const courts = listCourts();
+
+const isPost = Astro.request.method === "POST";
+const input = isPost ? await Astro.request.formData() : Astro.url.searchParams;
+const field = (name: string) => String(input.get(name) ?? "");
+
+let refused: string | null = null;
+if (isPost) {
+  // raw ids, not the fallbacks below: a bad id must be refused, never booked
+  // against whoever happens to be first in the list
+  const span = spanOf(input.getAll("slot").map(Number));
+  const request = { memberId: Number(field("member")), courtId: Number(field("court")), date: field("date") };
+  const outcome = span
+    ? placeBooking({ ...request, ...span }, now)
+    : { ok: false as const, reason: "Tick one or more times next to each other." };
+  if (outcome.ok) {
+    bus.emit("booking", outcome.booking);
+    const back = new URLSearchParams({
+      member: String(request.memberId),
+      court: String(request.courtId),
+      date: request.date,
+      booked: String(outcome.booking.id),
+    });
+    return Astro.redirect(`/?${back}`, 303);
+  }
+  refused = outcome.reason;
+  Astro.response.status = 422;
+}
+
+const member = members.find((m) => m.id === Number(field("member"))) ?? members[0];
+const court = courts.find((c) => c.id === Number(field("court"))) ?? courts[0];
+const date = /^\d{4}-\d{2}-\d{2}$/.test(field("date")) ? field("date") : now.date;
+const maxDate = addDays(now.date, RULES.maxAdvanceDays);
+
+// the booking just made, shown only to the member it belongs to
+const bookedId = Number(Astro.url.searchParams.get("booked"));
+const booked = bookedId ? getBooking(bookedId) : undefined;
+const confirmation =
+  booked && booked.memberId === member.id
+    ? {
+        booking: booked,
+        court: courts.find((c) => c.id === booked.courtId),
+        // why nothing was free, as it stood when this booking was made
+        note:
+          booked.freeMinutes === 0
+            ? freeBlockNote(
+                member,
+                booked.date,
+                memberBookingsOn(member.id, booked.date).filter((b) => b.id < booked.id),
+              )
+            : null,
+      }
+    : undefined;
+
+// The date picker: whole Monday-to-Sunday weeks from the one holding today to
+// the one holding the last bookable day. Days outside that range are shown so
+// the weeks line up, but aren't links.
+const weekday = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+const calendarStart = addDays(now.date, -weekday(now.date));
+const calendarDays = Array.from(
+  { length: daysBetween(calendarStart, addDays(maxDate, 6 - weekday(maxDate))) + 1 },
+  (_, i) => addDays(calendarStart, i),
+);
+const calendarWeeks = Array.from({ length: calendarDays.length / 7 }, (_, i) => calendarDays.slice(i * 7, i * 7 + 7));
+const dayLink = (d: string) => `/?${new URLSearchParams({ member: String(member.id), court: String(court.id), date: d })}`;
+
+const slots = slotsFor(date, bookingsOnCourt(court.id, date), now);
+const freeNote = freeBlockNote(member, date, memberBookingsOn(member.id, date));
+const membershipStatus = !member.membershipValidUntil
+  ? "Not a member"
+  : hasMembershipOn(member, now.date)
+    ? `Current; valid until ${day(member.membershipValidUntil)}`
+    : `Ended ${day(member.membershipValidUntil)}`;
+const packageStatus = !member.packageExpiresOn
+  ? "None"
+  : packageCurrentOn(member, now.date)
+    ? `Current; expires ${day(member.packageExpiresOn)}`
+    : `Expired ${day(member.packageExpiresOn)}`;
+const history = memberHistory(member.id);
+const locations = [...new Set(courts.map((c) => c.location))];
 ---
 
 <!doctype html>
@@ -10,44 +120,234 @@ const messages = listMessages();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 prototype</title>
+    <title>Book a court · ANU Tennis Club</title>
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/book/">Book a court</a>
-      <a href="/">Guestbook</a>
+      <a href="/" aria-current="page">Book a court</a>
       <a href="/readme/">About</a>
     </nav>
     <main>
-      <h1>Guestbook</h1>
-      <p>
-        A minimal full-stack starter: messages live in SQLite on the machine's
-        volume (state survives a reload and a redeploy), and new messages
-        appear in every open tab over a server-sent-events stream — open this
-        page twice and sign it in one. Replace all of this with your own
-        prototype.
-      </p>
-      <form method="post" action="/api/messages">
-        <label for="body">Leave a message</label>
-        <input id="body" name="body" required maxlength="500" />
-        <button>Sign</button>
+      <h1>Book an ANU Tennis Club court</h1>
+
+      {
+        confirmation && (
+          <section class="result booked" role="status" aria-labelledby="booked-heading">
+            <h2 id="booked-heading">Booked</h2>
+            <p>
+              {confirmation.court?.name}, {day(confirmation.booking.date)},{" "}
+              {clock(confirmation.booking.startMinute)}–{clock(confirmation.booking.endMinute)}.
+            </p>
+            <p>
+              {confirmation.booking.freeMinutes > 0 ? `${hours(confirmation.booking.freeMinutes)} free. ` : ""}
+              Hire {dollars(confirmation.booking.chargeCents - confirmation.booking.lightsCents)}, lights{" "}
+              {dollars(confirmation.booking.lightsCents)}: <strong>{dollars(confirmation.booking.chargeCents)}</strong>{" "}
+              to pay.
+            </p>
+            {confirmation.note && <p>{confirmation.note}</p>}
+          </section>
+        )
+      }
+      {
+        refused && (
+          <section class="result refused" role="alert" aria-labelledby="refused-heading">
+            <h2 id="refused-heading">Not booked</h2>
+            <p>{refused}</p>
+          </section>
+        )
+      }
+
+      <form method="get" action="/" class="choose">
+        <label>
+          Member
+          <select name="member">
+            {members.map((m) => <option value={m.id} selected={m.id === member.id}>{m.name}</option>)}
+          </select>
+        </label>
+        <label>
+          Court
+          <select name="court">
+            {
+              locations.map((location) => (
+                <optgroup label={location}>
+                  {courts
+                    .filter((c) => c.location === location)
+                    .map((c) => (
+                      <option value={c.id} selected={c.id === court.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ))
+            }
+          </select>
+        </label>
+        <input type="hidden" name="date" value={date} />
+        <div class="field">
+          <span class="field-label" id="date-label">Date</span>
+          <details class="datepicker">
+            <summary aria-labelledby="date-label date-value"><span id="date-value">{day(date)}</span></summary>
+            <table class="calendar">
+              <caption>Pick a day</caption>
+        <thead>
+          <tr>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <th scope="col">{d}</th>)}</tr>
+        </thead>
+        <tbody>
+          {
+            calendarWeeks.map((week, row) => (
+              <tr>
+                {week.map((d, col) => {
+                  // the month is named where it starts, and in the first cell
+                  const label = (
+                    <>
+                      {(d.endsWith("-01") || (row === 0 && col === 0)) && <span class="month">{month(d)}</span>}
+                      {Number(d.slice(8))}
+                    </>
+                  );
+                  return (
+                    <td class:list={{ today: d === now.date }}>
+                      {d >= now.date && d <= maxDate ? (
+                        <a href={dayLink(d)} aria-label={day(d)} aria-current={d === date ? "date" : undefined}>
+                          {label}
+                        </a>
+                      ) : (
+                        <span class="off">{label}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          }
+        </tbody>
+            </table>
+          </details>
+        </div>
+        <button>Show times</button>
       </form>
-      <ul id="messages">
-        {messages.map((message) => <li>{message.body}</li>)}
-      </ul>
+
+      <section class="member-card" aria-labelledby="member-heading">
+        <h2 id="member-heading">{member.name}</h2>
+        <dl>
+          <div>
+            <dt>Price list</dt>
+            <dd>
+              {member.rate === "student" ? "Student" : "General public"}: hire{" "}
+              {dollars(RULES.hireCentsPerHour[member.rate])} an hour
+            </dd>
+          </div>
+          <div>
+            <dt>ANUTC membership</dt>
+            <dd>{membershipStatus}</dd>
+          </div>
+          <div>
+            <dt>Booking Package</dt>
+            <dd>{packageStatus}</dd>
+          </div>
+          <div>
+            <dt>{day(date)}</dt>
+            <dd>
+{freeNote ?? `The first ${hours(RULES.freeBlockMinutes)} you book are free.`}
+            </dd>
+          </div>
+          <div>
+            <dt>Lights</dt>
+            <dd>{dollars(RULES.lightsCentsPerHour)} an hour from {clock(daylightEnd(date))}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <form method="post" action="/" class="timetable" data-court={court.id} data-date={date}>
+        <input type="hidden" name="member" value={member.id} />
+        <input type="hidden" name="court" value={court.id} />
+        <input type="hidden" name="date" value={date} />
+        <fieldset>
+          <legend>{court.name}, {day(date)}</legend>
+          <ul class="slots">
+            {
+              slots.map((slot) => {
+                const status = slot.taken ? "Booked" : slot.tooSoon ? "Too late" : slot.tooFar ? "Too far ahead" : null;
+                return (
+                  <li>
+                    <label class:list={["slot", { unavailable: status }]}>
+                      <input type="checkbox" name="slot" value={slot.startMinute} disabled={status !== null} />
+                      <span class="time">
+                        {clock(slot.startMinute)}–{clock(slot.endMinute)}
+                      </span>
+                      <span class="tag" data-status>
+                        {status ?? (slot.daylight ? "" : `Lights ${dollars(RULES.lightsCentsPerHour)}`)}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })
+            }
+          </ul>
+        </fieldset>
+        <button>Book the ticked times</button>
+      </form>
+
+      <section aria-labelledby="mine-heading">
+        <h2 id="mine-heading">My bookings</h2>
+        {history.length === 0 && <p>No bookings yet.</p>}
+        <ul class="history">
+          {
+            history.map((booking) => (
+              <li>
+                <span class="when">
+                  {day(booking.date)}, {clock(booking.startMinute)}–{clock(booking.endMinute)} · {booking.court.name}
+                </span>
+                <span class="status">{isCompleted(booking, now) ? "Completed" : "Upcoming"}</span>
+                <span class="cost">
+                  {booking.freeMinutes > 0 ? `${hours(booking.freeMinutes)} free · ` : ""}
+                  hire {dollars(booking.chargeCents - booking.lightsCents)} · lights {dollars(booking.lightsCents)} ·
+                  total {dollars(booking.chargeCents)}
+                </span>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
     </main>
     <script>
-      // The live half of the demo: subscribe to the SSE stream and prepend
-      // messages as they arrive. The form itself needs none of this — its
-      // POST + redirect re-renders the submitting tab from SQLite; this
-      // stream is how every other tab finds out.
-      const list = document.querySelector("#messages");
+      // Changing member or court shows the new timetable straight away; the
+      // "Show times" button does the same without JavaScript.
+      for (const select of document.querySelectorAll<HTMLSelectElement>(".choose select")) {
+        select.addEventListener("change", () => select.form?.submit());
+      }
+
+      // The calendar pops up from the date and closes like any popup: on a
+      // click elsewhere, or Escape.
+      const picker = document.querySelector<HTMLDetailsElement>(".datepicker");
+      document.addEventListener("click", (event) => {
+        if (picker?.open && !picker.contains(event.target as Node)) picker.open = false;
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && picker?.open) {
+          picker.open = false;
+          picker.querySelector("summary")?.focus();
+        }
+      });
+
+      // Live: when anyone books this court on this day, grey those hours out
+      // here too, so a member doesn't tick a slot that's already gone. The
+      // server re-checks on submit either way; this only saves a refusal.
+      const timetable = document.querySelector<HTMLFormElement>(".timetable");
       const source = new EventSource("/api/events");
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        const item = document.createElement("li");
-        item.textContent = message.body;
-        list?.prepend(item);
+      source.addEventListener("booking", (event) => {
+        const booking = JSON.parse(event.data);
+        if (!timetable) return;
+        if (String(booking.courtId) !== timetable.dataset.court || booking.date !== timetable.dataset.date) return;
+        for (const box of timetable.querySelectorAll<HTMLInputElement>('input[name="slot"]')) {
+          const start = Number(box.value);
+          if (start < booking.startMinute || start >= booking.endMinute) continue;
+          box.checked = false;
+          box.disabled = true;
+          const label = box.closest("label");
+          label?.classList.add("unavailable");
+          const tag = label?.querySelector("[data-status]");
+          if (tag) tag.textContent = "Booked";
+        }
       });
     </script>
   </body>
