@@ -82,6 +82,14 @@ the after-dark condition from the $8 rule.)*
   Membership".
 - Same page: "You may only book up to two weeks in advance and regular bookings
   are not permitted with the ANUTC Booking Package."
+- Same page: "Standard booking fees apply for ANUTC members booking the ANU
+  Tennis Courts without purchasing the ANUTC Booking Package". The page doesn't
+  give the amount.
+- Same page: "There are three ANU Tennis Court locations currently available
+  for hire: South Oval Tennis Courts, Mills Road Tennis Court (just opposite 80
+  Mills Road), Crawford / Old Canberra House Tennis Court". The page doesn't
+  say how many courts South Oval has. Celeste says four, so the app has six
+  courts.
 - `portal.anu-sport.com.au/Booking/Book`, read in a rendered browser: "Minimum
   notice: 30 minutes", "Maximum notice: 14 days".
 
@@ -96,6 +104,32 @@ the after-dark condition from the $8 rule.)*
   the package "Expires 1st March the following year". The club says book "at
   least 24 hours in advance"; the portal allows 30 minutes. Pick one on
   purpose and say which.
+
+### Decided (Celeste, 2026-09-29)
+
+The unknowns above that the app needs an answer to, settled on purpose. Each
+number lives in one constant (see "One fact, one piece of code").
+
+- **The package expires 1 March the following year**, as the package itself
+  states. The club's "end of February" and UniOne's 2026-12-31 aren't used.
+- **Minimum notice is 30 minutes**, as the portal enforces. The club's 24 hours
+  is "advised", and this app confirms at submission, so nothing in it needs a
+  day. Don't explain the club's 24 hours: why it exists is unknown.
+- **Daylight ends at 19:00 during daylight saving and 17:00 outside it**, in
+  Canberra time. *(Celeste's own knowledge. The club's "5:00pm" notice is
+  dated 28 April 2026, which is outside daylight saving, so the two agree.)*
+- **A package gives one free block a day**: one consecutive run of at most two
+  hours, on one court, in daylight. Everything else that day, including a
+  second booking, is $8.00 an hour. This is the literal reading of "two
+  consecutive hours ... per day, on the same court", not a total that can be
+  split across bookings.
+- **Pending: the price for a member with no current package.** Celeste knows
+  an official rate and will supply it. Until then, don't invent a number and
+  don't reuse $8. $8 is the package's overage rate, not published as the
+  general hire price.
+- **No login.** A few invented demo members, picked on the page, show having a
+  package, having none, and having one that has expired. None of them is
+  Celeste or carries her details.
 
 **Rule: any claim about ANU's systems has to come from the list above, a page
 quoted verbatim, or Celeste. The agent doesn't infer how they work inside.**
