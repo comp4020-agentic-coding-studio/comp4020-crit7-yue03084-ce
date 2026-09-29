@@ -1,0 +1,240 @@
+---
+import {
+  bookingsOnCourt,
+  getBooking,
+  listCourts,
+  listMembers,
+  memberBookingsOn,
+  memberHistory,
+  placeBooking,
+} from "../lib/db";
+import { bus } from "../lib/events";
+import { clock, day, dollars, hours } from "../lib/format";
+import { addDays, canberraNow, freeBlockNote, isCompleted, RULES, slotsFor, spanOf } from "../lib/rules";
+import "../styles.css";
+
+// One page does the whole job: pick who and where, see that court's day, tick
+// the hours, book. Reading it changes nothing; the only write is the POST
+// from the timetable, which the server re-checks against the database.
+const now = canberraNow();
+const members = listMembers();
+const courts = listCourts();
+
+const isPost = Astro.request.method === "POST";
+const input = isPost ? await Astro.request.formData() : Astro.url.searchParams;
+const field = (name: string) => String(input.get(name) ?? "");
+
+let refused: string | null = null;
+if (isPost) {
+  // raw ids, not the fallbacks below: a bad id must be refused, never booked
+  // against whoever happens to be first in the list
+  const span = spanOf(input.getAll("slot").map(Number));
+  const request = { memberId: Number(field("member")), courtId: Number(field("court")), date: field("date") };
+  const outcome = span
+    ? placeBooking({ ...request, ...span }, now)
+    : { ok: false as const, reason: "Tick one or more times next to each other." };
+  if (outcome.ok) {
+    bus.emit("booking", outcome.booking);
+    const back = new URLSearchParams({
+      member: String(request.memberId),
+      court: String(request.courtId),
+      date: request.date,
+      booked: String(outcome.booking.id),
+    });
+    return Astro.redirect(`/book/?${back}`, 303);
+  }
+  refused = outcome.reason;
+  Astro.response.status = 422;
+}
+
+const member = members.find((m) => m.id === Number(field("member"))) ?? members[0];
+const court = courts.find((c) => c.id === Number(field("court"))) ?? courts[0];
+const date = /^\d{4}-\d{2}-\d{2}$/.test(field("date")) ? field("date") : now.date;
+const maxDate = addDays(now.date, RULES.maxAdvanceDays);
+
+// the booking just made, shown only to the member it belongs to
+const bookedId = Number(Astro.url.searchParams.get("booked"));
+const booked = bookedId ? getBooking(bookedId) : undefined;
+const confirmation =
+  booked && booked.memberId === member.id
+    ? {
+        booking: booked,
+        court: courts.find((c) => c.id === booked.courtId),
+        // why nothing was free, as it stood when this booking was made
+        note:
+          booked.freeMinutes === 0
+            ? freeBlockNote(
+                member,
+                booked.date,
+                memberBookingsOn(member.id, booked.date).filter((b) => b.id < booked.id),
+              )
+            : null,
+      }
+    : undefined;
+
+const slots = slotsFor(date, bookingsOnCourt(court.id, date), now);
+const freeNote = freeBlockNote(member, date, memberBookingsOn(member.id, date));
+const history = memberHistory(member.id);
+const locations = [...new Set(courts.map((c) => c.location))];
+---
+
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Book a court · ANU Tennis Club</title>
+  </head>
+  <body>
+    <nav aria-label="site">
+      <a href="/book/" aria-current="page">Book a court</a>
+      <a href="/">Guestbook</a>
+      <a href="/readme/">About</a>
+    </nav>
+    <main>
+      <h1>Book an ANU Tennis Club court</h1>
+
+      {
+        confirmation && (
+          <section class="result booked" role="status" aria-labelledby="booked-heading">
+            <h2 id="booked-heading">Booked</h2>
+            <p>
+              {confirmation.court?.name}, {day(confirmation.booking.date)},{" "}
+              {clock(confirmation.booking.startMinute)}–{clock(confirmation.booking.endMinute)}.
+            </p>
+            <p>
+              {confirmation.booking.freeMinutes > 0 ? `${hours(confirmation.booking.freeMinutes)} free. ` : ""}
+              Hire {dollars(confirmation.booking.chargeCents - confirmation.booking.lightsCents)}, lights{" "}
+              {dollars(confirmation.booking.lightsCents)}: <strong>{dollars(confirmation.booking.chargeCents)}</strong>{" "}
+              to pay.
+            </p>
+            {confirmation.note && <p>{confirmation.note}</p>}
+          </section>
+        )
+      }
+      {
+        refused && (
+          <section class="result refused" role="alert" aria-labelledby="refused-heading">
+            <h2 id="refused-heading">Not booked</h2>
+            <p>{refused}</p>
+          </section>
+        )
+      }
+
+      <form method="get" action="/book/" class="choose">
+        <label>
+          Member
+          <select name="member">
+            {members.map((m) => <option value={m.id} selected={m.id === member.id}>{m.name}</option>)}
+          </select>
+        </label>
+        <label>
+          Court
+          <select name="court">
+            {
+              locations.map((location) => (
+                <optgroup label={location}>
+                  {courts
+                    .filter((c) => c.location === location)
+                    .map((c) => (
+                      <option value={c.id} selected={c.id === court.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ))
+            }
+          </select>
+        </label>
+        <label>
+          Date
+          <input type="date" name="date" value={date} min={now.date} max={maxDate} required />
+        </label>
+        <button>Show times</button>
+      </form>
+
+      <p class="package">
+        {
+          freeNote
+            ? `${freeNote} Hire on ${day(date)} is ${dollars(RULES.hireCentsPerHour[member.rate])} an hour.`
+            : `The first ${hours(RULES.freeBlockMinutes)} you book on ${day(date)} are free; after that, hire is ${dollars(RULES.hireCentsPerHour[member.rate])} an hour.`
+        }
+        {" "}Lights are {dollars(RULES.lightsCentsPerHour)} an hour after dark.
+      </p>
+
+      <form method="post" action="/book/" class="timetable" data-court={court.id} data-date={date}>
+        <input type="hidden" name="member" value={member.id} />
+        <input type="hidden" name="court" value={court.id} />
+        <input type="hidden" name="date" value={date} />
+        <fieldset>
+          <legend>{court.name}, {day(date)}</legend>
+          <ul class="slots">
+            {
+              slots.map((slot) => {
+                const status = slot.taken ? "Booked" : slot.tooSoon ? "Too late" : slot.tooFar ? "Too far ahead" : null;
+                return (
+                  <li>
+                    <label class:list={["slot", { unavailable: status }]}>
+                      <input type="checkbox" name="slot" value={slot.startMinute} disabled={status !== null} />
+                      <span class="time">
+                        {clock(slot.startMinute)}–{clock(slot.endMinute)}
+                      </span>
+                      <span class="tag" data-status>
+                        {status ?? (slot.daylight ? "" : `Lights ${dollars(RULES.lightsCentsPerHour)}`)}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })
+            }
+          </ul>
+        </fieldset>
+        <button>Book the ticked times</button>
+      </form>
+
+      <section aria-labelledby="mine-heading">
+        <h2 id="mine-heading">My bookings</h2>
+        {history.length === 0 && <p>No bookings yet.</p>}
+        <ul class="history">
+          {
+            history.map((booking) => (
+              <li>
+                <span class="when">
+                  {day(booking.date)}, {clock(booking.startMinute)}–{clock(booking.endMinute)} · {booking.court.name}
+                </span>
+                <span class="status">{isCompleted(booking, now) ? "Completed" : "Upcoming"}</span>
+                <span class="cost">
+                  {booking.freeMinutes > 0 ? `${hours(booking.freeMinutes)} free · ` : ""}
+                  hire {dollars(booking.chargeCents - booking.lightsCents)} · lights {dollars(booking.lightsCents)} ·
+                  total {dollars(booking.chargeCents)}
+                </span>
+              </li>
+            ))
+          }
+        </ul>
+      </section>
+    </main>
+    <script>
+      // Live: when anyone books this court on this day, grey those hours out
+      // here too, so a member doesn't tick a slot that's already gone. The
+      // server re-checks on submit either way; this only saves a refusal.
+      const timetable = document.querySelector<HTMLFormElement>(".timetable");
+      const source = new EventSource("/api/events");
+      source.addEventListener("booking", (event) => {
+        const booking = JSON.parse(event.data);
+        if (!timetable) return;
+        if (String(booking.courtId) !== timetable.dataset.court || booking.date !== timetable.dataset.date) return;
+        for (const box of timetable.querySelectorAll<HTMLInputElement>('input[name="slot"]')) {
+          const start = Number(box.value);
+          if (start < booking.startMinute || start >= booking.endMinute) continue;
+          box.checked = false;
+          box.disabled = true;
+          const label = box.closest("label");
+          label?.classList.add("unavailable");
+          const tag = label?.querySelector("[data-status]");
+          if (tag) tag.textContent = "Booked";
+        }
+      });
+    </script>
+  </body>
+</html>

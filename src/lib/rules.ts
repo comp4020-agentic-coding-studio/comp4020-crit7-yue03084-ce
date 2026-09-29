@@ -81,6 +81,10 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
+export function addDays(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 // A package that "Expires 1st March" covers bookings on dates before that day.
 export function hasPackageOn(member: Member, date: string): boolean {
   return member.packageExpiresOn !== null && date < member.packageExpiresOn;
@@ -118,6 +122,37 @@ export type Decision =
     }
   | { ok: false; reason: string };
 
+// Why a member gets no free hire on a date, or null if their free block is
+// still there. The page shows this before booking and decide() prices by it,
+// so the two can't disagree.
+export function freeBlockNote(
+  member: Member,
+  date: string,
+  memberBookings: Pick<Booking, "freeMinutes">[],
+): string | null {
+  if (!hasPackageOn(member, date)) {
+    return member.packageExpiresOn
+      ? `Your Booking Package expired on ${member.packageExpiresOn}.`
+      : "You don't have a Booking Package.";
+  }
+  if (memberBookings.some((booking) => booking.freeMinutes > 0)) {
+    return "You've already used today's two free hours.";
+  }
+  return null;
+}
+
+// The timetable submits the start of each ticked slot; a booking is one
+// unbroken run of them. Returns that run, or null if the slots have a gap or
+// none were ticked. Alignment and opening hours are decide()'s to check.
+export function spanOf(slotStarts: number[]): { startMinute: number; endMinute: number } | null {
+  const starts = [...new Set(slotStarts)].sort((a, b) => a - b);
+  if (starts.length === 0 || starts.some((start) => !Number.isInteger(start))) return null;
+  for (let i = 1; i < starts.length; i++) {
+    if (starts[i] !== starts[i - 1] + RULES.slotMinutes) return null;
+  }
+  return { startMinute: starts[0], endMinute: starts[starts.length - 1] + RULES.slotMinutes };
+}
+
 // The whole rulebook: given what a member asked for and what's already booked,
 // either refuse with the rule that stopped it or say how much is free and what
 // the rest costs. Pure, so the page and the tests exercise the same code the
@@ -135,7 +170,12 @@ export function decide(request: BookingRequest): Decision {
     return { ok: false, reason: "Pick one or more whole-hour slots between 6am and 10pm." };
   }
 
+  // a malformed date makes daysBetween NaN, which every comparison below
+  // would wave through
   const days = daysBetween(now.date, date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(days)) {
+    return { ok: false, reason: "Pick a date." };
+  }
   if (days < 0 || (days === 0 && startMinute - now.minute < RULES.minNoticeMinutes)) {
     return { ok: false, reason: `Bookings need at least ${RULES.minNoticeMinutes} minutes' notice.` };
   }
@@ -151,14 +191,7 @@ export function decide(request: BookingRequest): Decision {
 
   // One free block a day: the first up-to-two hours of the booking, dark or
   // not, and only if no earlier booking that day already had free time.
-  let note: string | null = null;
-  if (!hasPackageOn(member, date)) {
-    note = member.packageExpiresOn
-      ? `Your Booking Package expired on ${member.packageExpiresOn}.`
-      : "You don't have a Booking Package.";
-  } else if (request.memberBookings.some((booking) => booking.freeMinutes > 0)) {
-    note = "You've already used today's two free hours.";
-  }
+  const note = freeBlockNote(member, date, request.memberBookings);
   const freeMinutes = note ? 0 : Math.min(RULES.freeBlockMinutes, minutes);
 
   const hireCents = ((minutes - freeMinutes) * RULES.hireCentsPerHour[member.rate]) / 60;
@@ -173,6 +206,8 @@ export interface Slot {
   taken: boolean;
   // past, or inside the minimum notice
   tooSoon: boolean;
+  // beyond the furthest date that can be booked
+  tooFar: boolean;
   daylight: boolean;
 }
 
@@ -192,6 +227,7 @@ export function slotsFor(
       ...slot,
       taken: courtBookings.some((booking) => overlaps(booking, slot)),
       tooSoon: days < 0 || (days === 0 && start - now.minute < RULES.minNoticeMinutes),
+      tooFar: days > RULES.maxAdvanceDays,
       daylight: start < daylightEnd(date),
     });
   }

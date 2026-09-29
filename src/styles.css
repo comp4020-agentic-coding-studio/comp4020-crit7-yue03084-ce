@@ -11,6 +11,12 @@ main {
   margin: 0 auto;
 }
 
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
 a {
   color: #0b5fff;
 }
@@ -23,9 +29,14 @@ form {
   margin-block: 1.5rem;
 }
 
-input {
+input:not([type="checkbox"]) {
   flex: 1;
   min-width: 12rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+}
+
+select {
   padding: 0.4rem 0.6rem;
   font: inherit;
 }
@@ -37,4 +48,125 @@ button {
 
 #messages {
   padding-inline-start: 1.2rem;
+}
+
+/* booking page */
+
+.choose {
+  align-items: flex-end;
+}
+
+.choose label {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+
+/* a long member name would otherwise set the select's width, and the page's */
+.choose select {
+  width: 100%;
+}
+
+.package {
+  color: #444;
+}
+
+.timetable fieldset {
+  width: 100%;
+  margin: 0;
+  padding: 0.5rem 1rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.4rem;
+}
+
+.timetable legend {
+  font-weight: 600;
+}
+
+.slots,
+.history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.4rem;
+}
+
+.slot {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid #bbb;
+  border-radius: 0.3rem;
+  cursor: pointer;
+}
+
+.slot:has(input:checked) {
+  border-color: #0b5fff;
+  background: #e8efff;
+}
+
+.slot.unavailable {
+  color: #595959;
+  background: #eee;
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.slot .time,
+.slot .tag {
+  white-space: nowrap;
+}
+
+.slot .tag {
+  margin-inline-start: auto;
+  font-size: 0.85em;
+}
+
+.result {
+  margin-block: 1rem;
+  padding: 0.5rem 1rem;
+  border-inline-start: 0.3rem solid;
+}
+
+.result h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.result p {
+  margin: 0.25rem 0;
+}
+
+.booked {
+  border-color: #1a7f37;
+  background: #eaf6ec;
+}
+
+.refused {
+  border-color: #b3261e;
+  background: #fbeaea;
+}
+
+.history li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.75rem;
+  padding-block: 0.5rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.history .status {
+  font-weight: 600;
+}
+
+.history .cost {
+  flex-basis: 100%;
+  color: #444;
 }

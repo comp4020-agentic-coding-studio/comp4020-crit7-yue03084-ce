@@ -5,6 +5,7 @@ import {
   decide,
   isCompleted,
   slotsFor,
+  spanOf,
 } from "../src/lib/rules";
 import type { Member } from "../src/lib/schema";
 
@@ -101,6 +102,12 @@ describe("booking rules: what gets refused", () => {
     expect(ask({ date: "2026-09-28" })).toMatchObject({ ok: false });
   });
 
+  it("refuses a date that isn't one", () => {
+    expect(ask({ date: "" })).toMatchObject({ ok: false });
+    expect(ask({ date: "2026-13-45" })).toMatchObject({ ok: false });
+    expect(ask({ date: "tomorrow" })).toMatchObject({ ok: false });
+  });
+
   it("refuses more than 14 days ahead, accepts exactly 14", () => {
     expect(ask({ date: "2026-10-13" })).toMatchObject({ ok: true });
     expect(ask({ date: "2026-10-14" })).toMatchObject({ ok: false });
@@ -140,8 +147,20 @@ describe("booking rules: the timetable offers only what the server accepts", () 
   it("agrees with decide() on every free slot", () => {
     for (const slot of slotsFor(now.date, [{ startMinute: h(14), endMinute: h(15) }], now)) {
       const decision = ask({ date: now.date, startMinute: slot.startMinute, endMinute: slot.endMinute, courtBookings: [{ startMinute: h(14), endMinute: h(15) }] });
-      expect(decision.ok, `slot at ${slot.startMinute / 60}:00`).toBe(!slot.taken && !slot.tooSoon);
+      expect(decision.ok, `slot at ${slot.startMinute / 60}:00`).toBe(!slot.taken && !slot.tooSoon && !slot.tooFar);
     }
+  });
+
+  it("marks every slot past the 14-day limit too far", () => {
+    expect(slotsFor("2026-10-13", [], now).some((slot) => slot.tooFar)).toBe(false);
+    expect(slotsFor("2026-10-14", [], now).every((slot) => slot.tooFar)).toBe(true);
+  });
+
+  it("books ticked slots only as one unbroken run", () => {
+    expect(spanOf([h(12), h(10), h(11)])).toEqual({ startMinute: h(10), endMinute: h(13) });
+    expect(spanOf([h(10), h(12)])).toBeNull();
+    expect(spanOf([])).toBeNull();
+    expect(spanOf([Number.NaN])).toBeNull();
   });
 });
 
