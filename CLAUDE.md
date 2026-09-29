@@ -127,6 +127,11 @@ number lives in one constant (see "One fact, one piece of code").
   an official rate and will supply it. Until then, don't invent a number and
   don't reuse $8. $8 is the package's overage rate, not published as the
   general hire price.
+- **Courts open 06:00–22:00** *(Celeste; the club doesn't publish hours)*. The
+  day is cut into one-hour slots. A booking is one or more consecutive slots
+  on one court, and a slot someone holds is shown as unavailable before
+  anyone picks it. The server checks again on submit, because two people can
+  be looking at the same free slot.
 - **No login.** A few invented demo members, picked on the page, show having a
   package, having none, and having one that has expired. None of them is
   Celeste or carries her details.

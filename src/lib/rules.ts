@@ -1,0 +1,196 @@
+import type { Booking, Member } from "./schema";
+
+// Every number the booking rules use, in one place. The page, the rejection
+// messages and the tests all read these, so a rule can't say one thing on
+// screen and another at the server. Where each comes from is recorded in
+// CLAUDE.md ("Published rules" and "Decided").
+export const RULES = {
+  // anutennis.org/courtbookings/: "up to two consecutive hours of
+  // complimentary ANU Tennis Court hire per day, on the same court, during
+  // daylight hours"
+  freeBlockMinutes: 120,
+  // same sentence: usage beyond that "will be charged at the applicable rate
+  // of $8.00 per hour"
+  overageCentsPerHour: 800,
+  // The rate for a member without a current package. The club says only
+  // "Standard booking fees apply"; Celeste will supply the figure. Until
+  // then such bookings are refused rather than priced with a guess.
+  standardCentsPerHour: null as number | null,
+  // the portal: "Minimum notice: 30 minutes"
+  minNoticeMinutes: 30,
+  // the portal: "Maximum notice: 14 days"; the club: "up to two weeks"
+  maxAdvanceDays: 14,
+  // Celeste: daylight ends at 19:00 in daylight saving, 17:00 outside it
+  daylightEndDst: 19 * 60,
+  daylightEndStandard: 17 * 60,
+  // Celeste: courts open 06:00–22:00, booked in one-hour slots
+  openMinute: 6 * 60,
+  closeMinute: 22 * 60,
+  slotMinutes: 60,
+} as const;
+
+// ACT observes the same daylight saving as NSW; this zone name is Canberra.
+const TIME_ZONE = "Australia/Canberra";
+
+// "now" as the rules see it: a Canberra calendar date and minutes past its
+// midnight, the same shape bookings are stored in.
+export interface CanberraNow {
+  date: string;
+  minute: number;
+}
+
+export function canberraNow(at: Date = new Date()): CanberraNow {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: TIME_ZONE,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(at)
+      .map((part) => [part.type, part.value]),
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    minute: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+
+// Whether a Canberra date falls in daylight saving. Asked at 12:00 UTC, which
+// is late evening in Canberra, well after the 2–3am changeover, so the answer
+// holds for the whole playing day.
+export function isDaylightSaving(date: string): boolean {
+  const offset = new Intl.DateTimeFormat("en-AU", {
+    timeZone: TIME_ZONE,
+    timeZoneName: "shortOffset",
+  })
+    .formatToParts(new Date(`${date}T12:00:00Z`))
+    .find((part) => part.type === "timeZoneName")?.value;
+  return offset === "GMT+11";
+}
+
+export function daylightEnd(date: string): number {
+  return isDaylightSaving(date) ? RULES.daylightEndDst : RULES.daylightEndStandard;
+}
+
+// Whole days from one calendar date to another, ignoring time zones: both are
+// Canberra dates already.
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+// A package that "Expires 1st March" covers bookings on dates before that day.
+export function hasPackageOn(member: Member, date: string): boolean {
+  return member.packageExpiresOn !== null && date < member.packageExpiresOn;
+}
+
+export function isCompleted(booking: Pick<Booking, "date" | "endMinute">, now: CanberraNow): boolean {
+  return booking.date < now.date || (booking.date === now.date && booking.endMinute <= now.minute);
+}
+
+export function overlaps(a: { startMinute: number; endMinute: number }, b: { startMinute: number; endMinute: number }): boolean {
+  return a.startMinute < b.endMinute && b.startMinute < a.endMinute;
+}
+
+export interface BookingRequest {
+  member: Member;
+  date: string;
+  startMinute: number;
+  endMinute: number;
+  // bookings already on this court that day, by anyone
+  courtBookings: Pick<Booking, "startMinute" | "endMinute">[];
+  // this member's bookings that day, on any court
+  memberBookings: Pick<Booking, "freeMinutes">[];
+  now: CanberraNow;
+}
+
+export type Decision =
+  | { ok: true; freeMinutes: number; chargeCents: number }
+  | { ok: false; reason: string };
+
+// The whole rulebook: given what a member asked for and what's already booked,
+// either refuse with the rule that stopped it or say how much is free and what
+// the rest costs. Pure, so the page and the tests exercise the same code the
+// server runs.
+export function decide(request: BookingRequest): Decision {
+  const { member, date, startMinute, endMinute, now } = request;
+
+  if (
+    startMinute % RULES.slotMinutes !== 0 ||
+    endMinute % RULES.slotMinutes !== 0 ||
+    startMinute < RULES.openMinute ||
+    endMinute > RULES.closeMinute ||
+    endMinute <= startMinute
+  ) {
+    return { ok: false, reason: "Pick one or more whole-hour slots between 6am and 10pm." };
+  }
+
+  const days = daysBetween(now.date, date);
+  if (days < 0 || (days === 0 && startMinute - now.minute < RULES.minNoticeMinutes)) {
+    return { ok: false, reason: `Bookings need at least ${RULES.minNoticeMinutes} minutes' notice.` };
+  }
+  if (days > RULES.maxAdvanceDays) {
+    return { ok: false, reason: `You can book at most ${RULES.maxAdvanceDays} days ahead.` };
+  }
+
+  if (request.courtBookings.some((booking) => overlaps(booking, request))) {
+    return { ok: false, reason: "Someone has already booked this court for part of that time." };
+  }
+
+  const minutes = endMinute - startMinute;
+
+  if (!hasPackageOn(member, date)) {
+    if (RULES.standardCentsPerHour === null) {
+      return {
+        ok: false,
+        reason: member.packageExpiresOn
+          ? `Your Booking Package expired on ${member.packageExpiresOn}, and standard court fees aren't set up here yet.`
+          : "You don't have a Booking Package, and standard court fees aren't set up here yet.",
+      };
+    }
+    return { ok: true, freeMinutes: 0, chargeCents: (minutes * RULES.standardCentsPerHour) / 60 };
+  }
+
+  // One free block a day: the first up-to-two hours from the start, in
+  // daylight, and only if no earlier booking that day already had free time.
+  const freeUsed = request.memberBookings.some((booking) => booking.freeMinutes > 0);
+  const freeMinutes = freeUsed
+    ? 0
+    : Math.max(0, Math.min(RULES.freeBlockMinutes, daylightEnd(date) - startMinute, minutes));
+  const chargeCents = ((minutes - freeMinutes) * RULES.overageCentsPerHour) / 60;
+  return { ok: true, freeMinutes, chargeCents };
+}
+
+export interface Slot {
+  startMinute: number;
+  endMinute: number;
+  taken: boolean;
+  // past, or inside the minimum notice
+  tooSoon: boolean;
+  daylight: boolean;
+}
+
+// The day's one-hour slots on one court, for the timetable. Uses the same
+// overlap and notice rules as decide(), so a slot the page offers is one the
+// server will accept.
+export function slotsFor(
+  date: string,
+  courtBookings: Pick<Booking, "startMinute" | "endMinute">[],
+  now: CanberraNow,
+): Slot[] {
+  const slots: Slot[] = [];
+  const days = daysBetween(now.date, date);
+  for (let start = RULES.openMinute; start < RULES.closeMinute; start += RULES.slotMinutes) {
+    const slot = { startMinute: start, endMinute: start + RULES.slotMinutes };
+    slots.push({
+      ...slot,
+      taken: courtBookings.some((booking) => overlaps(booking, slot)),
+      tooSoon: days < 0 || (days === 0 && start - now.minute < RULES.minNoticeMinutes),
+      daylight: start < daylightEnd(date),
+    });
+  }
+  return slots;
+}
