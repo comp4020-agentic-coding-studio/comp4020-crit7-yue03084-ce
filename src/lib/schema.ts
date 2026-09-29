@@ -26,6 +26,9 @@ export const members = sqliteTable("members", {
   id: int().primaryKey({ autoIncrement: true }),
   name: text().notNull(),
   packageExpiresOn: text("package_expires_on"),
+  // the last day ANUTC membership is valid, inclusive: the club says "until
+  // the end of February the following year". null means not a member.
+  membershipValidUntil: text("membership_valid_until"),
   // which row of ANU Sport's price list the member pays hire at
   rate: text({ enum: ["student", "general"] })
     .notNull()

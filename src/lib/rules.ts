@@ -86,9 +86,21 @@ export function addDays(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 }
 
+// Membership is valid up to and including its last day, the end of February.
+export function hasMembershipOn(member: Member, date: string): boolean {
+  return member.membershipValidUntil !== null && date <= member.membershipValidUntil;
+}
+
 // A package that "Expires 1st March" covers bookings on dates before that day.
-export function hasPackageOn(member: Member, date: string): boolean {
+export function packageCurrentOn(member: Member, date: string): boolean {
   return member.packageExpiresOn !== null && date < member.packageExpiresOn;
+}
+
+// Whether the package gives free time on a date: it has to be current, and
+// the club says it "is only available to those with a current ANUTC
+// Membership".
+export function hasPackageOn(member: Member, date: string): boolean {
+  return packageCurrentOn(member, date) && hasMembershipOn(member, date);
 }
 
 export function isCompleted(booking: Pick<Booking, "date" | "endMinute">, now: CanberraNow): boolean {
@@ -131,6 +143,11 @@ export function freeBlockNote(
   date: string,
   memberBookings: Pick<Booking, "freeMinutes">[],
 ): string | null {
+  if (!hasMembershipOn(member, date)) {
+    return member.membershipValidUntil
+      ? `Your ANUTC membership ended on ${day(member.membershipValidUntil)}, so no Booking Package applies.`
+      : "A Booking Package needs a current ANUTC membership.";
+  }
   if (!hasPackageOn(member, date)) {
     return member.packageExpiresOn
       ? `Your Booking Package expired on ${day(member.packageExpiresOn)}.`

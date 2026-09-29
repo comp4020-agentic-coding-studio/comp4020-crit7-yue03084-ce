@@ -117,6 +117,11 @@ number lives in one constant (see "One fact, one piece of code").
 
 - **The package expires 1 March the following year**, as the package itself
   states. The club's "end of February" and UniOne's 2026-12-31 aren't used.
+- **ANUTC membership runs to the end of February the following year**, as the
+  club states; UniOne's 2026-12-31 isn't used. *(Celeste, 2026-09-30.)* A
+  package "is only available to those with a current ANUTC Membership", so
+  without one the package gives no free time and hire is charged at the price
+  list. Booking itself stays open: the courts are general hire "for ANYONE".
 - **Minimum notice is 30 minutes**, as the portal enforces. The club's 24 hours
   is "advised", and this app confirms at submission, so nothing in it needs a
   day. Don't explain the club's 24 hours: why it exists is unknown.

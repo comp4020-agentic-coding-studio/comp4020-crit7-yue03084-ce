@@ -16,7 +16,13 @@ import {
   daylightEnd,
   daysBetween,
   freeBlockNote,
-  hasPackageOn, isCompleted, RULES, slotsFor, spanOf } from "../lib/rules";
+  hasMembershipOn,
+  isCompleted,
+  packageCurrentOn,
+  RULES,
+  slotsFor,
+  spanOf,
+} from "../lib/rules";
 import "../styles.css";
 
 // One page does the whole job: pick who and where, see that court's day, tick
@@ -92,9 +98,14 @@ const dayLink = (d: string) => `/book/?${new URLSearchParams({ member: String(me
 
 const slots = slotsFor(date, bookingsOnCourt(court.id, date), now);
 const freeNote = freeBlockNote(member, date, memberBookingsOn(member.id, date));
+const membershipStatus = !member.membershipValidUntil
+  ? "Not a member"
+  : hasMembershipOn(member, now.date)
+    ? `Current; valid until ${day(member.membershipValidUntil)}`
+    : `Ended ${day(member.membershipValidUntil)}`;
 const packageStatus = !member.packageExpiresOn
   ? "None"
-  : hasPackageOn(member, now.date)
+  : packageCurrentOn(member, now.date)
     ? `Current; expires ${day(member.packageExpiresOn)}`
     : `Expired ${day(member.packageExpiresOn)}`;
 const history = memberHistory(member.id);
@@ -224,17 +235,17 @@ const locations = [...new Set(courts.map((c) => c.location))];
             </dd>
           </div>
           <div>
+            <dt>ANUTC membership</dt>
+            <dd>{membershipStatus}</dd>
+          </div>
+          <div>
             <dt>Booking Package</dt>
             <dd>{packageStatus}</dd>
           </div>
           <div>
             <dt>{day(date)}</dt>
             <dd>
-              {
-                !hasPackageOn(member, date)
-                  ? "No free hours without a current Booking Package."
-                  : (freeNote ?? `The first ${hours(RULES.freeBlockMinutes)} you book are free.`)
-              }
+{freeNote ?? `The first ${hours(RULES.freeBlockMinutes)} you book are free.`}
             </dd>
           </div>
           <div>

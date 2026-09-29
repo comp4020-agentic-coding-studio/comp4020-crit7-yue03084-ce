@@ -12,9 +12,9 @@ import type { Member } from "../src/lib/schema";
 // The rules the club and the portal publish, and the ones Celeste settled
 // (CLAUDE.md), held as a contract on the one function the server runs. Each
 // case is a promise the app makes to a member before they turn up to play.
-const withPackage: Member = { id: 1, name: "package", packageExpiresOn: "2027-03-01", rate: "student" };
-const noPackage: Member = { id: 2, name: "none", packageExpiresOn: null, rate: "general" };
-const expired: Member = { id: 3, name: "expired", packageExpiresOn: "2026-03-01", rate: "student" };
+const withPackage: Member = { id: 1, name: "package", packageExpiresOn: "2027-03-01", membershipValidUntil: "2027-02-28", rate: "student" };
+const noPackage: Member = { id: 2, name: "none", packageExpiresOn: null, membershipValidUntil: "2027-02-28", rate: "general" };
+const expired: Member = { id: 3, name: "expired", packageExpiresOn: "2026-03-01", membershipValidUntil: "2027-02-28", rate: "student" };
 
 const h = (hour: number) => hour * 60;
 const now = { date: "2026-09-29", minute: h(9) };
@@ -87,6 +87,21 @@ describe("booking rules: without a current package", () => {
     const decision = ask({ member: expired });
     expect(decision).toMatchObject(priced(0, 3000));
     if (decision.ok) expect(decision.note).toContain("1 Mar 2026");
+  });
+
+  it("gives a package no free time once membership has lapsed", () => {
+    const lapsed = { ...withPackage, membershipValidUntil: "2026-02-28" };
+    const decision = ask({ member: lapsed });
+    expect(decision).toMatchObject(priced(0, 3000));
+    if (decision.ok) expect(decision.note).toContain("membership ended on Sat, 28 Feb 2026");
+    expect(ask({ member: { ...withPackage, membershipValidUntil: null } })).toMatchObject(priced(0, 3000));
+  });
+
+  it("counts membership valid through the last day of February", () => {
+    const later = { date: "2027-02-20", minute: h(9) };
+    const endsEarly = { ...withPackage, membershipValidUntil: "2027-02-27" };
+    expect(ask({ member: endsEarly, date: "2027-02-27", now: later })).toMatchObject(priced(120, 0));
+    expect(ask({ member: endsEarly, date: "2027-02-28", now: later })).toMatchObject(priced(0, 3000));
   });
 });
 

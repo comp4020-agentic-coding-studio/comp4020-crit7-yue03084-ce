@@ -1,0 +1,1 @@
+ALTER TABLE `members` ADD `membership_valid_until` text;
