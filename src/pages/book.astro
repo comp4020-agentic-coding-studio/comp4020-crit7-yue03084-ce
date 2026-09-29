@@ -9,8 +9,8 @@ import {
   placeBooking,
 } from "../lib/db";
 import { bus } from "../lib/events";
-import { clock, day, dollars, hours } from "../lib/format";
-import { addDays, canberraNow, freeBlockNote, isCompleted, RULES, slotsFor, spanOf } from "../lib/rules";
+import { clock, day, dollars, hours, month } from "../lib/format";
+import { addDays, canberraNow, daysBetween, freeBlockNote, isCompleted, RULES, slotsFor, spanOf } from "../lib/rules";
 import "../styles.css";
 
 // One page does the whole job: pick who and where, see that court's day, tick
@@ -71,6 +71,18 @@ const confirmation =
             : null,
       }
     : undefined;
+
+// The date picker: whole Monday-to-Sunday weeks from the one holding today to
+// the one holding the last bookable day. Days outside that range are shown so
+// the weeks line up, but aren't links.
+const weekday = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+const calendarStart = addDays(now.date, -weekday(now.date));
+const calendarDays = Array.from(
+  { length: daysBetween(calendarStart, addDays(maxDate, 6 - weekday(maxDate))) + 1 },
+  (_, i) => addDays(calendarStart, i),
+);
+const calendarWeeks = Array.from({ length: calendarDays.length / 7 }, (_, i) => calendarDays.slice(i * 7, i * 7 + 7));
+const dayLink = (d: string) => `/book/?${new URLSearchParams({ member: String(member.id), court: String(court.id), date: d })}`;
 
 const slots = slotsFor(date, bookingsOnCourt(court.id, date), now);
 const freeNote = freeBlockNote(member, date, memberBookingsOn(member.id, date));
@@ -146,12 +158,44 @@ const locations = [...new Set(courts.map((c) => c.location))];
             }
           </select>
         </label>
-        <label>
-          Date
-          <input type="date" name="date" value={date} min={now.date} max={maxDate} required />
-        </label>
+        <input type="hidden" name="date" value={date} />
         <button>Show times</button>
       </form>
+
+      <table class="calendar">
+        <caption>Pick a day</caption>
+        <thead>
+          <tr>{["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <th scope="col">{d}</th>)}</tr>
+        </thead>
+        <tbody>
+          {
+            calendarWeeks.map((week, row) => (
+              <tr>
+                {week.map((d, col) => {
+                  // the month is named where it starts, and in the first cell
+                  const label = (
+                    <>
+                      {(d.endsWith("-01") || (row === 0 && col === 0)) && <span class="month">{month(d)}</span>}
+                      {Number(d.slice(8))}
+                    </>
+                  );
+                  return (
+                    <td class:list={{ today: d === now.date }}>
+                      {d >= now.date && d <= maxDate ? (
+                        <a href={dayLink(d)} aria-label={day(d)} aria-current={d === date ? "date" : undefined}>
+                          {label}
+                        </a>
+                      ) : (
+                        <span class="off">{label}</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
 
       <p class="package">
         {
@@ -215,6 +259,12 @@ const locations = [...new Set(courts.map((c) => c.location))];
       </section>
     </main>
     <script>
+      // Changing member or court shows the new timetable straight away; the
+      // "Show times" button does the same without JavaScript.
+      for (const select of document.querySelectorAll<HTMLSelectElement>(".choose select")) {
+        select.addEventListener("change", () => select.form?.submit());
+      }
+
       // Live: when anyone books this court on this day, grey those hours out
       // here too, so a member doesn't tick a slot that's already gone. The
       // server re-checks on submit either way; this only saves a refusal.

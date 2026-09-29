@@ -72,6 +72,69 @@ button {
   color: #444;
 }
 
+.calendar {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0.25rem;
+  table-layout: fixed;
+  text-align: center;
+}
+
+.calendar caption {
+  font-weight: 600;
+  text-align: start;
+}
+
+.calendar th {
+  font-size: 0.85em;
+  font-weight: 400;
+  color: #595959;
+}
+
+.calendar td {
+  padding: 0;
+}
+
+.calendar a,
+.calendar .off {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 2.75rem;
+  border-radius: 0.3rem;
+}
+
+.calendar a {
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid #bbb;
+}
+
+.calendar a:hover {
+  border-color: #0b5fff;
+}
+
+.calendar a[aria-current] {
+  color: #fff;
+  background: #0b5fff;
+  border-color: #0b5fff;
+}
+
+.calendar .off {
+  color: #767676;
+}
+
+.calendar .today a,
+.calendar .today .off {
+  font-weight: 700;
+}
+
+.calendar .month {
+  font-size: 0.7em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .timetable fieldset {
   width: 100%;
   margin: 0;
@@ -93,7 +156,7 @@ button {
 
 .slots {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
   gap: 0.4rem;
 }
 

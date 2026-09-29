@@ -14,6 +14,11 @@ export function hours(minutes: number): string {
   return `${count} ${count === 1 ? "hour" : "hours"}`;
 }
 
+// A Canberra calendar date's month, short ("Oct"), for the date picker.
+export function month(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("en-AU", { timeZone: "UTC", month: "short" });
+}
+
 // A Canberra calendar date as a reader says it ("Wed 30 Sep 2026"). Formatted
 // in UTC because the string already is the Canberra date; converting it again
 // would shift it a day.
