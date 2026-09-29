@@ -8,6 +8,20 @@
       "when": 1784173013185,
       "tag": "0000_dry_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790650138850,
+      "tag": "0001_purple_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790650139301,
+      "tag": "0002_seed_courts_and_demo_members",
+      "breakpoints": true
     }
   ]
 }
