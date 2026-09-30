@@ -1,54 +1,39 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-Written by you, for a reader: how you got from the brief to the harness and
-agentic workflow behind this submission. Markers read this file and follow its
-citations; they don't trawl the repo for evidence you didn't point at.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
-
 ## What I built
 
-A sentence or two. `README.md` is where the account of what the app is and what
-good means here lives; this file is how you got there.
+A court booking page for the ANU Tennis Club. I book courts often, and the
+system I use today felt wrong to me. What the app does, and where its rules
+come from, is in `README.md`.
 
 ## How I got here
 
-The account of the process: how the work actually went, and how you knew the
-result was right. Tell it in whatever order makes it clear. A weekly prototype
-needs a paragraph or two; an assignment needs more.
+Buying my Booking Package and membership took real effort, because the
+information is scattered. Most of it is on the tennis club's website, but the
+purchase, my membership status and the booking itself are all on ANU Sport.
+When I book, I can't see my membership status or what I'll pay, and there's no
+record of anything except the confirmation email and the receipt. Before
+building, I looked at each piece myself: my ANU Sport account, the booking
+portal, the club website and the price list
+([`c999ab2`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/c999ab2),
+[`3291161`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/3291161)).
 
-Cite the record as you go, as links whose text is the commit hash or range and
-whose target is this repo's commit or compare URL, so a reader clicks straight
-to the evidence:
+The $8 mattered most. It is the lights fee, but the club's page doesn't say so
+clearly, so the agent read it as the court fee after dark. I corrected that:
+hire and lights are charged separately
+([`98540eb`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/98540eb)).
 
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
+There is no login. Building one is a lot of work and hard to demo, so the page
+lets you pick an invented demo member instead.
 
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
+Typing in a date was too inconvenient, so I asked for a calendar you can click,
+which also shows the day of the week at a glance
+([`cd3440a`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/cd3440a),
+[`17fe048`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/17fe048)).
 
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the point better than a sentence does.
-Commit the file to this repo and link it with a **relative** path, which is what
-makes it render on GitHub: `![alt text](docs/before.png)`. Images don't count
-towards the word count and don't replace the citation.
-
-## Before you ship
-
-`pnpm check:evidence` verifies that this comment is gone, that your citations
-resolve to real commits, that a crit week's reflection entry is in
-`reflections/`, and that your `CLAUDE.md` is there. It checks that your account
-is traceable, not that it is good: that is the marker's call.
-
-Images aren't checked: unlike a citation whose SHA doesn't resolve, a broken
-image is visible the moment this file is rendered on GitHub.
+The rules are convoluted, so the check I trusted most was going through them
+myself: I had the agent set out how every price is worked out, and checked each
+line. The tests that hold those rules are in
+[`5276e59`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/5276e59)
+and
+[`b97aa95`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-yue03084-ce/commit/b97aa95).
